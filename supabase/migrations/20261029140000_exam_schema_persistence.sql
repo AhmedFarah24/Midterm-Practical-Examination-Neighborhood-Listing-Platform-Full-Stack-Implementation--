@@ -44,7 +44,8 @@ CREATE FUNCTION public.is_platform_admin() RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
 AS $$ SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND role='admin') $$;
 REVOKE ALL ON FUNCTION public.is_platform_admin() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO anon, authenticated;
+-- Anonymous callers receive FALSE; no profile data is returned by this function.
 -- Ensure only trusted administrators can create privileged profiles.
 CREATE POLICY "own or admin profile read" ON public.profiles FOR SELECT TO authenticated
 USING(id=auth.uid() OR public.is_platform_admin());
@@ -72,6 +73,8 @@ CREATE POLICY "public property sponsors" ON public.property_sponsors FOR SELECT 
 USING((EXISTS(SELECT 1 FROM public.properties p WHERE p.id=property_id AND p.status='approved')
  AND EXISTS(SELECT 1 FROM public.sponsors s WHERE s.id=sponsor_id AND s.active_status)) OR public.is_platform_admin());
 CREATE POLICY "admin links insert" ON public.property_sponsors FOR INSERT TO authenticated WITH CHECK(public.is_platform_admin());
+CREATE POLICY "admin links update" ON public.property_sponsors FOR UPDATE TO authenticated
+USING(public.is_platform_admin()) WITH CHECK(public.is_platform_admin());
 CREATE POLICY "admin links delete" ON public.property_sponsors FOR DELETE TO authenticated USING(public.is_platform_admin());
 -- Grant read of zero inquiries to anonymous/public roles.
 CREATE POLICY "inquiry insert approved listing" ON public.inquiries FOR INSERT TO anon,authenticated
@@ -81,12 +84,12 @@ USING(public.is_platform_admin() OR EXISTS(SELECT 1 FROM public.properties p WHE
 CREATE POLICY "admin inquiry update" ON public.inquiries FOR UPDATE TO authenticated USING(public.is_platform_admin()) WITH CHECK(public.is_platform_admin());
 CREATE POLICY "admin inquiry delete" ON public.inquiries FOR DELETE TO authenticated USING(public.is_platform_admin());
 -- Access to the exposed tables is still governed by RLS.
-GRANT SELECT ON public.profiles TO authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.profiles TO authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.properties TO authenticated;
 GRANT SELECT ON public.properties TO anon;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.sponsors TO authenticated;
 GRANT SELECT ON public.sponsors TO anon;
-GRANT SELECT,INSERT,DELETE ON public.property_sponsors TO authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.property_sponsors TO authenticated;
 GRANT SELECT ON public.property_sponsors TO anon;
 GRANT INSERT ON public.inquiries TO anon,authenticated;
 GRANT SELECT,UPDATE,DELETE ON public.inquiries TO authenticated;
